@@ -1,0 +1,44 @@
+---
+-
+  hosts: 127.0.0.1
+  connection: local
+  vars:
+     endpoint: gitlab-ce-gitlab-user1.apps.ose3sandbox.com
+     user: username
+     password: password
+
+  tasks:
+  - name: 'Get root token'
+    uri:
+      url: 'http://{{ endpoint }}/api/v3/session'
+      body: 'login={{ user }}&password={{ password }}'
+      method: POST
+      status_code: 201
+    register: token_out
+    until: token_out|success
+    retries: 3
+    delay: 60
+
+  - name: 'Check if  project exists'
+    uri:
+      url: 'http://{{ endpoint }}/api/v3/projects/root/nationalparks'
+      HEADER_PRIVATE-TOKEN: "{{ token_out.json.private_token }}"
+      method: GET
+      status_code: 404
+      return_content: no
+    register: project_absent
+    ignore_errors: true
+
+  - name: 'Import nationalparks repository'
+    uri:
+       url: 'http://{{ endpoint }}/api/v3/projects'
+       HEADER_PRIVATE-TOKEN: "{{token_out.json.private_token}}"
+       body: 'name=nationalparks&import_url=https://github.com/openshift-roadshow/nationalparks&public=true'
+       method: POST
+       status_code: 201
+       return_content: no
+    register: result
+    until: result|success
+    retries: 3
+    delay: 60
+    when: project_absent | success
